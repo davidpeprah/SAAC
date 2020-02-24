@@ -128,8 +128,8 @@ function buildingNm($building) {
    "*Preschool*" {"MPS", "Milford Preschool"; break}
    "*Extended Day*" {"EXT", "Milford Preschool"; break}
    "*Administrative Offices*" {"BOE", "Milford Board of Education"; break}
-   "*District*" {"District", "Milford Junior School"; break}
-   "*Wyoming*" {"MJH", "Milford Junior School"; break}
+   "*District*" {"District", "Milford School District"; break}
+   "*Wyoming*" {"Wyoming", "Wyoming"; break}
    "*Williamsburg*" {"MJH", "Milford Junior School"; break}
    "*Success Academy*" {"SSA", "Milford Student Success Academy"; break}
    "*St* Columb*" {"St. Columbian", "St. Columbian"; break}
@@ -229,7 +229,7 @@ $userPrincipalName = "$SamAccountName@MEVSD.NET"
 
 
 
-<# Create User Account
+# Create User Account
  New-ADUser -Name $fullName -GivenName $firstName -Surname $lastName -DisplayName $fullName `
  -AccountPassword (ConvertTo-SecureString -AsPlainText $password -Force) `
  -SamAccountName $SamAccountName -UserPrincipalName $userPrincipalName `
@@ -246,7 +246,7 @@ $userPrincipalName = "$SamAccountName@MEVSD.NET"
     
   }#>
 
-  "$Time Account was successfully created for $path $profileDir" | out-file .\event_log.log -append
+  "$Time Account was successfully created for $fullName" | out-file .\event_log.log -append
 
   # Return this information to python
   return (1, $emailAddress, "Account Successfully Created")
