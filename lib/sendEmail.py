@@ -5,7 +5,7 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import mimetypes
-import os
+import os, sys, logging
 #from __future__ import print_function
 import pickle
 import os.path
@@ -26,24 +26,22 @@ def sendMessage(user_id, message):
     """Shows basic usage of the Gmail API.
     Lists the user's Gmail labels.
     """
-    
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
-    if os.path.exists(r'credentials\token2.pickle'):
-        with open(r'credentials\token2.pickle', 'rb') as token:
+    if os.path.exists(r'credentials\token.pickle'):
+        with open(r'credentials\token.pickle', 'rb') as token:
             creds = pickle.load(token)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                r'credentials\credentials2.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(r'credentials\credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
-        with open(r'credentials\token2.pickle', 'wb') as token:
+        with open(r'credentials\token.pickle', 'wb') as token:
             pickle.dump(creds, token)
 
     service = build('gmail', 'v1', credentials=creds)
@@ -52,9 +50,9 @@ def sendMessage(user_id, message):
         message = (service.users().messages().send(userId=user_id, body=message).execute())
         #print 'Message Id: %s' % message['id']
         return message
-    except errors.HttpError, error:
-        return "error"
-        #print 'An error occurred: %s' % error
+    except errors.HttpError as error:
+        #return "error"
+        print(error)
 
 
 
@@ -77,8 +75,11 @@ def CreateMessage(sender, to, cc, subject, message_text):
   message['cc'] = cc
   message['from'] = sender
   message['subject'] = subject
-  return {'raw': base64.urlsafe_b64encode(message.as_string())}
 
+  b64_bytes = base64.urlsafe_b64encode(message.as_bytes())
+  b64_string = b64_bytes.decode()
+  #return {'raw': base64.urlsafe_b64encode(message.as_string())}
+  return {'raw': b64_string}
 
 def CreateMessageWithAttachment(sender, to, subject, message_text, file_dir,filename):
   """Create a message for an email.
@@ -132,6 +133,5 @@ def CreateMessageWithAttachment(sender, to, subject, message_text, file_dir,file
   return {'raw': base64.urlsafe_b64encode(message.as_string())}
 
 
-if __name__ == '__main__':
-    result = sendMessage('me', CreateMessage('peprah_d@milfordschools.org', 'lildave1510@yahoo.com', 'peprahdavid@gmail.com', 'TEST', 'Python programming with Google API'))
-    print '%s' % result[u'labelIds'][0]        
+
+            

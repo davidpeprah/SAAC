@@ -13,12 +13,14 @@ from checkUserGS import checkUser
 from sendEmail import sendMessage, CreateMessage
 
 # If modifying these scopes, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/admin.directory.user.readonly', 'https://www.googleapis.com/auth/gmail.send']
 
 # The ID and range of a sample spreadsheet.
-SPREADSHEET_ID = '1gKZCaLZq79LzwxB_wpHpU6Tu4R-eTr5vGyLFG_ZQ0R8'
+SPREADSHEET_ID = '1BhBBOc-clB-WGdd_PbH1zCj9QxHEkGiISqLalOSiloA'
 sheet = ""
 
+# Variables
+#districtDepart = ['Transportation', 'Food Service', 'Maintenance']
 
 def main():
     """Shows basic usage of the Sheets API.
@@ -51,10 +53,10 @@ def main():
     sheet = service.spreadsheets()
 
 
-def readSheet():
+def readSheet(sh):
     global sheet
 
-    RANGE_NAME = 'Sheet1!A2:I'
+    RANGE_NAME = sh + '!A2:R'
 
     #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
     result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
@@ -64,66 +66,120 @@ def readSheet():
     if not values:
         print('No data found.')
     else:
-        row_add = 2
+        row_count = 2
         for row in values:
-            if row[8] == "New":
-                lastName = '"' + row[0] + '"'
-                firstName = '"' + row[1] + '"'
-                lastFourSSN = '"' + row[2] + '"'
-                position = '"' + row[5] + '"'
-                building = '"' + row[6] + '"'
-                staffType = '"' + row[7] + '"'
-                createAcc = subprocess.Popen(["Powershell.exe", r'lib\setAcc.ps1 ' +\
-                 lastName + ' ' + firstName + ' ' + lastFourSSN + ' ' + str(position) + ' ' +\
-                 str(building) + ' ' + staffType ], stdout=subprocess.PIPE)
-                message = createAcc.communicate()[0][:-2]
-                status, email, update = message.split('\r\n')
+            try:
+                if row[8] == "NEW":
+                    
+                    currentEmpEmail = '"' + row[1] + '"'
+                    lastName = '"' + row[2].title() + '"'
+                    firstName = '"' + row[3].title() + '"'
+                    #lastFourSSN = '"' + row[2] + '"'
+                    personalEmail = '"' + row[4] + '"'
+                    position = '"' + row[5].title() + '"'
+                    building = '"' + row[6] + '"'
+                    department = '"' + row[7] + '"'
+
+                    #if (department in districtDepart) and (building == 'District'):
+
+                        
+                    
+                    # Send Data to Powershell
+                    createAcc = subprocess.Popen(["Powershell.exe", r'lib\setAcc.ps1 ' +\
+                    currentEmpEmail + ' ' + lastName + ' ' + firstName + ' ' + personalEmail + ' ' + str(position) + ' ' +\
+                    str(building) + ' ' + department ], stdout=subprocess.PIPE)
+
+                    # Read Information from Powershell
+                    message = str(createAcc.communicate()[0][:-2], 'utf-8')
+                    status, email, update = message.split('\r\n')
 
 
-                if (status == "1"):
-                    UpdateStatus(row_add,status_msg(status),update)
-                    UpdateMail(row_add,email)
-                elif (status == "2"):
-                    UpdateStatus(row_add,status_msg(status),update)
+                    if (status == "1"):
+                        UpdateStatus(sh,row_count,status_msg(status),update)
+                        UpdateMail(sh,row_count,email)
+                        UpdateEntryType(sh,row_count,message)
+                        
+                    elif (status == "2"):
+                        UpdateStatus(sh,row_count,status_msg(status),update)
+                        UpdateEntryType(sh,row_count,message)
 
-            elif row[8] == "Pending":
-                email = str(row[4])
-                personal_email = str(row[3])
+                        # Send an email to sysaid and copy ERC Team when there is an error
+                        fname = firstName.strip('"')
+                        lname = lastName.strip('"')
+                        
+                        sendMessage('me', CreateMessage('SAC Service Account <sacsa@hcsdoh.org>', 'helpdesk@vartek.com', 'Nana Drah <ndrah@vartek.com>', \
+                                                       'Account Creation Error - Hamilton', \
+                                                      "Hi ERC Team\n\n  \
+                                                       An error occured while creating an account for the user below: \n \
+                                                       Fullname:  %s %s \n \
+                                                       Please check the event log which is located in the log folder of this application for details\n\nThank you" % (fname, lname)))
+                                                    
+                                                    
 
-                try:
-                    check = checkUser(email)
-                    if check == email:
-                        UpdateStatus(row_add,status_msg("0"),"Account Successfully confirm in G-Suite")
-                        lastFourSSN = str(row[2])
-                        passReset = subprocess.Popen(["Powershell.exe", r'lib\resetPass.ps1 ' + email + ' ' + lastFourSSN ], stdout=subprocess.PIPE)
-                        msg = passReset.communicate()[0][:-2]
+                elif row[10] == "Pending":
+                    email = str(row[9])
+                    personal_email = str(row[4])
+                    firstName = str(row[3])
+                    lastName = str(row[2])
+                    CurEmpEmail = str(row[1])
+                    
+                    try:
+                        check = checkUser(email)
+                        
+                        if check == email:
+                            UpdateStatus(sh,row_count,status_msg("0"),"Account Successfully confirm in G-Suite")
+                            passw = password()
+                            passReset = subprocess.Popen(["Powershell.exe", r'lib\resetPass.ps1 ' + email + ' ' + '"' + passw + '"' ], stdout=subprocess.PIPE)
+                            msg = str(passReset.communicate()[0][:-2], 'utf-8')
+                            status, user = msg.split('\r\n')
 
-                        #Send account information to staff and copy diane hill
-                        if (personal_email):
-                            sendMessage('me', CreateMessage('peprah_d@milfordschools.org', personal_email, 'dpeprah@vartek.com', 'Account Information for ' + row[1] + ' ' + row[0], \
-                                                            'Hi ' + row[1] + '\n\n' + \
-                                                            'Please your account information is provided below:\n' +\
-                                                            ' username: '+ email.split('@')[0] + '\n' +\
-                                                            ' email:    '+ email + '\n' +\
-                                                            ' password: milford'+ checkSSN(lastFourSSN) +'\n\n\n'   +\
-                                                            'Kindly reply to this email if you need any assistance\n\n' +\
-                                                            'Thank you'))
-                except HttpError as err:
-                    if err.resp.status in [404,]:
-                        UpdateStatus(row_add,status_msg("1"),"Account have not been created in Google Console yet")
-                    else:
-                        UpdateStatus(row_add,status_msg("2"),"Error occured when trying to verify account in Google console")
+                            
+                            #Send account information to the new staff personal email and notify the employee who made the entry
+                            if (personal_email):
+                                sendMessage('me', CreateMessage('HSD Account Info <sacsa@hcsdoh.org>', personal_email, 'David Peprah <dpeprah@hcsdoh.org>', 'Account Information for ' + firstName + ' ' + lastName, \
+                                                                f"Hi  {firstName}  \n\n \
+                                                                Please your account information is provided below:\n \
+                                                                  \t username: {user} \n \
+                                                                  \t email:    {email}  \n \
+                                                                  \t password: {passw}  \n\n\n   \
+                                                                Kindly reply to this email if you need any assistance\n\n \
+                                                                Thank you"))
+                                
+                            sendMessage('me', CreateMessage('HSD Account Info <sacsa@hcsdoh.org>', CurEmpEmail, 'David Peprah <dpeprah@hcsdoh.org>', 'Account for ' + firstName + ' ' + lastName +' Completed Successfully', \
+                                                                f"Hi \n\n \
+                                                                This is to notify you that the account for {firstName} {lastName} was created successfully.\n \
+                                                                An email containing the account information has been sent to the new hire using the personal email you provided.\n \
+                                                                Thank you"))
+                            
+                    except HttpError as err:
+                        if err.resp.status in [404,]:
+                            UpdateStatus(sh,row_count,status_msg("1"),"Account has not been created in Google Console yet")
+                        else:
+                            UpdateStatus(sh,row_count,status_msg("2"),"Error occured when trying to verify account in Google console")
+
+                else:
+                    print("Nothing is happening!!!")
 
 
-            row_add += 1
+                #elif row[16] == "Active":
+                    
 
-def UpdateStatus(address,status,update):
+
+                #elif row[16] == "Activiting"
+                    
+
+            except IndexError:
+                row_count += 1
+                continue
+            
+            row_count += 1
+
+def UpdateStatus(sh,address,status,update):
     global sheet
 
-    RANGE_NAME = "Sheet1!I" + str(address) + ":J" + str(address)
+    RANGE_NAME = sh + "!K" + str(address) + ":L" + str(address)
 
     body_value = {"majorDimension": "ROWS", "values": [[str(status),str(update)]]}
-
 
     #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
     result = sheet.values().update(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME, valueInputOption='USER_ENTERED', body=body_value).execute()
@@ -131,10 +187,10 @@ def UpdateStatus(address,status,update):
     #values = result.get('values', [])
     #print(result)
 
-def UpdateMail(address,message):
+def UpdateMail(sh,address,message):
     global sheet
 
-    RANGE_NAME = "Sheet1!E" + str(address)
+    RANGE_NAME = sh + "!J" + str(address)
 
     body_value = {"majorDimension": "ROWS", "values": [[str(message)]]}
 
@@ -145,6 +201,20 @@ def UpdateMail(address,message):
     #values = result.get('values', [])
     #print(result)
 
+def UpdateEntryType(sh,row_add,message):
+    global sheet
+    
+    RANGE_NAME = sh + "!I" + str(row_add)
+
+    body_value = {"majorDimension": "ROWS", "values": [[str("OLD")]]}
+
+      #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
+    result = sheet.values().update(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME, valueInputOption='USER_ENTERED', body=body_value).execute()
+
+    #values = result.get('values', [])
+    #print(result)
+    
+    
 def status_msg(status):
     if status == "0":
         return "Done"
@@ -164,7 +234,60 @@ def checkSSN(ssn):
         return year
 
 
+def password():
+    import random
+    import array
+
+    # Maximum length of password 
+    MAX_LEN = 12
+
+    # An empty List to hold all the characters
+    COMBINED_LIST = []
+
+    # At least one of these characters should be in the password
+    # The characters are picked randomly. This uses ASCII 
+    DIGITS = chr(random.randint(48, 57))
+    UPPERCASE = chr(random.randint(65, 90))
+    LOWERCASE = chr(random.randint(97, 122))
+    SYMBOLS = ['&', '@', '!', '*', '%', '#']
+    RANDSYM = SYMBOLS[random.randint(0,5)]
+    
+
+    # Combined all the defined characters into a list
+    for x in range(48, 57): COMBINED_LIST += chr(x)
+    for x in range(97, 122): COMBINED_LIST += chr(x)
+    for x in range(65, 90): COMBINED_LIST += chr(x)
+    for x in SYMBOLS: COMBINED_LIST += x
+
+    # Combine the initial randomly selected characters from above
+    temp_pass = DIGITS + UPPERCASE + LOWERCASE + RANDSYM
+
+    # Add additional 8 characters to make up for the 12 Maximum length
+    for x in range(MAX_LEN -4):
+        temp_pass += random.choice(COMBINED_LIST)
+
+        # convert temporary password into array and shuffle to
+        # prevent it from having consistent pattern
+        # where the beginning of the password is predictable
+        temp_pass_list = array.array('u', temp_pass)
+        random.shuffle(temp_pass_list)
+
+    # traverse the temporary password array and append the chars
+    # to form the password
+    password = ""
+    for x in temp_pass_list:
+        password += x
+
+    return(password)
+
+    
 
 if __name__ == '__main__':
+    # Sheets of Personnel Recommendation Workbook for All
+    SHEETS = ["Form Responses 1"]
+
     main()
-    readSheet()
+
+    # Loop through the sheet
+    for sh in SHEETS:
+        readSheet(sh)
