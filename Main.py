@@ -1,3 +1,9 @@
+#
+#
+#  Author: David Peprah
+#
+#
+
 from __future__ import print_function
 import pickle
 import os.path
@@ -5,22 +11,37 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.errors import HttpError
-
+from configparser import ConfigParser
 import subprocess, sys
-sys.path.insert(0, 'lib')
 
+# Custom functions from lib folder
+sys.path.insert(0, 'lib')
 from checkUserGS import checkUser
 from sendEmail import sendMessage, CreateMessage
+
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/admin.directory.user.readonly', 'https://www.googleapis.com/auth/gmail.send']
 
+# Load Config file
+config = ConfigParser("\config\config.ini")
+
+if 'Document' not in config.sections():
+    exit()
+
 # The ID and range of a sample spreadsheet.
-SPREADSHEET_ID = '1BhBBOc-clB-WGdd_PbH1zCj9QxHEkGiISqLalOSiloA'
+if (config.get('Document', 'SpreadSheetID')):
+    SPREADSHEET_ID = config.get('Document', 'SpreadSheetID')
+    SHEETS = 'Sheet1' if not (config.get('Document', 'Sheets')) else config.get('Document', 'Sheets')
+    Range = '!A2:R' if not (config.get('Document', 'Range')) else config.get('Document', 'Range')
+else:
+    exit()
+
+
+
 sheet = ""
 
-# Variables
-#districtDepart = ['Transportation', 'Food Service', 'Maintenance']
+
 
 def main():
     """Shows basic usage of the Sheets API.

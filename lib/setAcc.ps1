@@ -1,14 +1,17 @@
-﻿import-Module ActiveDirectory
+﻿<#
+
+   Author: David Peprah
+
+#>
+
+import-Module ActiveDirectory
+
 
 $Time= (Get-Date)
 
 
-
-
-
 # This is used to determine the directory for the user's profile
-function profile_dir($Department, $building) {
-  
+function profile_dir($Department, $building) {  
 
   if ($building -eq "BOE") {
 
@@ -90,7 +93,7 @@ function EmailAddNm($lastName, $firstName) {
 }
 
 
-
+# Returns Fullname
 function fullNm($lastName, $firstName) {
 
     $proposefullName = "$firstName $lastName"
@@ -188,6 +191,7 @@ function dirPath($Department, $building) {
    return "OU=$Department, OU=Users, OU=$building"
  
 }
+
 
 function defaultStaffGroups($Department, $Building) {
 
