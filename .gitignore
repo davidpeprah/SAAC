@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# contains sensitive informations
+credentials/credentials.json
+credentials/token.pickle
