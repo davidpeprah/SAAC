@@ -58,7 +58,7 @@ def sendMessage(user_id, message):
 
 
 
-def CreateMessage(sender, to, cc, subject, message_text):
+def CreateMessage(sender, to, subject, message_text,cc=None):
   """Create a message for an email.
 
   Args:

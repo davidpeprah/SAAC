@@ -187,7 +187,9 @@ function dirPath($Department, $building) {
      return "OU=Student Services,OU=Users,OU=BOE"
   }
 
-  
+  if ($Department -in $Operations) {
+     return "OU=Operations, OU=Users, OU=$building"
+  }
    return "OU=$Department, OU=Users, OU=$building"
  
 }

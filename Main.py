@@ -24,20 +24,34 @@ from sendEmail import sendMessage, CreateMessage
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/admin.directory.user.readonly', 'https://www.googleapis.com/auth/gmail.send']
 
 # Load Config file
-config = ConfigParser("\config\config.ini")
+config = ConfigParser()
+config.read('config/config.ini')
 
-if 'Document' not in config.sections():
+
+if 'Document' not in config.sections() or 'admin' not in config.sections():
     exit()
 
 # The ID and range of a sample spreadsheet.
 if (config.get('Document', 'SpreadSheetID')):
     SPREADSHEET_ID = config.get('Document', 'SpreadSheetID')
     SHEETS = 'Sheet1' if not (config.get('Document', 'Sheets')) else config.get('Document', 'Sheets')
-    Range = '!A2:R' if not (config.get('Document', 'Range')) else config.get('Document', 'Range')
+    Range = '!A2:R' if not (config.get('Document', 'SheetRange')) else config.get('Document', 'SheetRange')
+    EntryTypeColAdd = config.get('Document', 'EntryTypeColAdd')
+    NewMailColAdd = config.get('Document', 'NewMailColAdd')
+    StatusColAdd = config.get('Document', 'StatusColAdd')
+    CommentColAdd = config.get('Document', 'CommentColAdd')
 else:
     exit()
 
-
+# Get authorized users and domains
+if (config.get('admin', 'AuthorizeUsers')):
+    authUsers = list(config.get('admin', 'AuthorizeUsers').split(','))
+    domain = config.get('admin', 'Domain')
+    admin = config.get('admin', 'sysadmin')
+    openticket = config.get('admin', 'openticket')
+    srvAccEmail = config.get('admin', 'serviceAccEmail')
+else:
+    exit()
 
 sheet = ""
 
@@ -76,8 +90,8 @@ def main():
 
 def readSheet(sh):
     global sheet
-
-    RANGE_NAME = sh + '!A2:R'
+    
+    RANGE_NAME = sh + Range
 
     #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
     result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
@@ -103,39 +117,47 @@ def readSheet(sh):
 
                     #if (department in districtDepart) and (building == 'District'):
 
+                    if currentEmpEmail.split("@")[0] in authUsers:
+                        # Send Data to Powershell
+                        createAcc = subprocess.Popen(["Powershell.exe", r'lib\setAcc.ps1 ' +\
+                        currentEmpEmail + ' ' + lastName + ' ' + firstName + ' ' + personalEmail + ' ' + str(position) + ' ' +\
+                        str(building) + ' ' + department ], stdout=subprocess.PIPE)
+
+                        # Read Information from Powershell
+                        message = str(createAcc.communicate()[0][:-2], 'utf-8')
+                        status, email, update = message.split('\r\n')
+
+
+                        if (status == "1"):
+                            UpdateStatus(sh,row_count,status_msg(status),update)
+                            UpdateMail(sh,row_count,email)
+                            UpdateEntryType(sh,row_count,message)
                         
-                    
-                    # Send Data to Powershell
-                    createAcc = subprocess.Popen(["Powershell.exe", r'lib\setAcc.ps1 ' +\
-                    currentEmpEmail + ' ' + lastName + ' ' + firstName + ' ' + personalEmail + ' ' + str(position) + ' ' +\
-                    str(building) + ' ' + department ], stdout=subprocess.PIPE)
+                        elif (status == "2"):
+                            UpdateStatus(sh,row_count,status_msg(status),update)
+                            UpdateEntryType(sh,row_count,message)
 
-                    # Read Information from Powershell
-                    message = str(createAcc.communicate()[0][:-2], 'utf-8')
-                    status, email, update = message.split('\r\n')
+                            # Send an email to sysaid and copy ERC Team when there is an error
+                            fname = firstName.strip('"')
+                            lname = lastName.strip('"')
+                            
+                            ticketMsg = f"Hi Tech Team\n\nAn error occured while creating an account for the user below: \nFullname: {fname} {lname}\nPlease check the event log which is located in the log folder of this application for details\n\nThank you"
 
-
-                    if (status == "1"):
-                        UpdateStatus(sh,row_count,status_msg(status),update)
-                        UpdateMail(sh,row_count,email)
-                        UpdateEntryType(sh,row_count,message)
-                        
-                    elif (status == "2"):
-                        UpdateStatus(sh,row_count,status_msg(status),update)
-                        UpdateEntryType(sh,row_count,message)
-
-                        # Send an email to sysaid and copy ERC Team when there is an error
-                        fname = firstName.strip('"')
-                        lname = lastName.strip('"')
-                        
-                        sendMessage('me', CreateMessage('SAC Service Account <sacsa@hcsdoh.org>', 'helpdesk@vartek.com', 'Nana Drah <ndrah@vartek.com>', \
-                                                       'Account Creation Error - Hamilton', \
-                                                      "Hi ERC Team\n\n  \
-                                                       An error occured while creating an account for the user below: \n \
-                                                       Fullname:  %s %s \n \
-                                                       Please check the event log which is located in the log folder of this application for details\n\nThank you" % (fname, lname)))
+                            ticketSubj = 'Account Creation Error - Hamilton'
+                            sendMessage('me', CreateMessage(srvAccEmail, openticket, ticketSubj,ticketMsg,admin))
+                                                     
+                            
                                                     
-                                                    
+                    else:
+                        UpdateStatus(sh,row_count,status_msg("3"),"Access Denied")
+                        UpdateEntryType(sh,row_count,"OLD")
+                        
+                        unauthorizedUser = row[1]
+                        deniedAccessMsg =  f"Hi\n\n  Please you are not authorized to create district email account. \n Contact the Human Resource department or send an email to {authUsers[0] + '@' + domain} \n\n Thank you"
+                        deniedSubj = 'UNAUTHORIZED USER - Hamilton'
+                        # Send an email to the unauthorized user and copy the admin if further investigation needed
+                        sendMessage('me', CreateMessage(srvAccEmail, unauthorizedUser, deniedSubj,deniedAccessMsg, admin))
+                                                                             
 
                 elif row[10] == "Pending":
                     email = str(row[9])
@@ -157,20 +179,15 @@ def readSheet(sh):
                             
                             #Send account information to the new staff personal email and notify the employee who made the entry
                             if (personal_email):
-                                sendMessage('me', CreateMessage('HSD Account Info <sacsa@hcsdoh.org>', personal_email, 'David Peprah <dpeprah@hcsdoh.org>', 'Account Information for ' + firstName + ' ' + lastName, \
-                                                                f"Hi  {firstName}  \n\n \
-                                                                Please your account information is provided below:\n \
-                                                                  \t username: {user} \n \
-                                                                  \t email:    {email}  \n \
-                                                                  \t password: {passw}  \n\n\n   \
-                                                                Kindly reply to this email if you need any assistance\n\n \
-                                                                Thank you"))
                                 
-                            sendMessage('me', CreateMessage('HSD Account Info <sacsa@hcsdoh.org>', CurEmpEmail, 'David Peprah <dpeprah@hcsdoh.org>', 'Account for ' + firstName + ' ' + lastName +' Completed Successfully', \
-                                                                f"Hi \n\n \
-                                                                This is to notify you that the account for {firstName} {lastName} was created successfully.\n \
-                                                                An email containing the account information has been sent to the new hire using the personal email you provided.\n \
-                                                                Thank you"))
+                                newHireMsg = f"Hi {firstName}\n\nPlease your account information is provided below:\n\tusername: {user}\n\temail: {email}\n\tpassword: {passw}\n\nKindly send an email to {admin} if you need any assistance\n\nThank you"
+                                newHireSubj = f'Account Information for  {firstName} {lastName}'
+                                sendMessage('me', CreateMessage(sender=srvAccEmail, to=personal_email, subject=newHireSubj,message_text=newHireMsg))
+                                
+
+                                empMsg  = f"Hi \n\nThis is to notify you that the account for {firstName} {lastName} was created successfully.\nAn email containing the account information has been sent to the new hire using the personal email you provided.\nThank you"
+                                empSubj = f'Account for {firstName} {lastName}  Completed Successfully'
+                                sendMessage('me', CreateMessage(sender=srvAccEmail, to=CurEmpEmail, subject=empSubj, message_text=empMsg))
                             
                     except HttpError as err:
                         if err.resp.status in [404,]:
@@ -179,7 +196,7 @@ def readSheet(sh):
                             UpdateStatus(sh,row_count,status_msg("2"),"Error occured when trying to verify account in Google console")
 
                 else:
-                    print("Nothing is happening!!!")
+                    print("Nothing to work on!!!")
 
 
                 #elif row[16] == "Active":
@@ -198,7 +215,7 @@ def readSheet(sh):
 def UpdateStatus(sh,address,status,update):
     global sheet
 
-    RANGE_NAME = sh + "!K" + str(address) + ":L" + str(address)
+    RANGE_NAME = sh + "!" + StatusColAdd + str(address) + ":" + CommentColAdd + str(address)
 
     body_value = {"majorDimension": "ROWS", "values": [[str(status),str(update)]]}
 
@@ -211,7 +228,7 @@ def UpdateStatus(sh,address,status,update):
 def UpdateMail(sh,address,message):
     global sheet
 
-    RANGE_NAME = sh + "!J" + str(address)
+    RANGE_NAME = sh + "!" + NewMailColAdd + str(address)
 
     body_value = {"majorDimension": "ROWS", "values": [[str(message)]]}
 
@@ -225,7 +242,7 @@ def UpdateMail(sh,address,message):
 def UpdateEntryType(sh,row_add,message):
     global sheet
     
-    RANGE_NAME = sh + "!I" + str(row_add)
+    RANGE_NAME = sh + "!" + EntryTypeColAdd + str(row_add)
 
     body_value = {"majorDimension": "ROWS", "values": [[str("OLD")]]}
 
@@ -243,6 +260,8 @@ def status_msg(status):
         return "Pending"
     elif status == "2":
         return "Error"
+    elif status == "3":
+        return "Denied"
 
 # Returns year if last four digit of social security is not found
 def checkSSN(ssn):
@@ -304,11 +323,10 @@ def password():
     
 
 if __name__ == '__main__':
-    # Sheets of Personnel Recommendation Workbook for All
-    SHEETS = ["Form Responses 1"]
-
+    # call the main function 
     main()
 
     # Loop through the sheet
+    SHEETS = list(SHEETS.split(','))
     for sh in SHEETS:
         readSheet(sh)
