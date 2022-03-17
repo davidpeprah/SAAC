@@ -1,4 +1,10 @@
-﻿import-Module ActiveDirectory
+﻿#
+#     Author: David Peprah
+#
+
+
+
+import-Module ActiveDirectory
 $Time= (Get-Date)
 
 Try {

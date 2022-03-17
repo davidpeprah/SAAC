@@ -104,20 +104,28 @@ def readSheet(sh):
         row_count = 2
         for row in values:
             try:
-                if row[8] == "NEW":
+                curEmpEmail = row[1]
+                lname = row[2].title()
+                fname = row[3].title()
+                pEmail = row[4]
+                jobTitle = row[5].title()
+                abuilding = row[6]
+                adepartment = row[7]
+                entryType = row[8]
+
+
+                if entryType == "NEW":
                     
-                    currentEmpEmail = '"' + row[1] + '"'
-                    lastName = '"' + row[2].title() + '"'
-                    firstName = '"' + row[3].title() + '"'
-                    #lastFourSSN = '"' + row[2] + '"'
-                    personalEmail = '"' + row[4] + '"'
-                    position = '"' + row[5].title() + '"'
-                    building = '"' + row[6] + '"'
-                    department = '"' + row[7] + '"'
+                    currentEmpEmail = '"' + curEmpEmail + '"'
+                    lastName = '"' + lname + '"'
+                    firstName = '"' + fname + '"'
+                    personalEmail = '"' + pEmail + '"'
+                    position = '"' + jobTitle + '"'
+                    building = '"' + abuilding + '"'
+                    department = '"' + adepartment + '"'
 
-                    #if (department in districtDepart) and (building == 'District'):
 
-                    if currentEmpEmail.split("@")[0] in authUsers:
+                    if curEmpEmail.split("@")[0] in authUsers:
                         # Send Data to Powershell
                         createAcc = subprocess.Popen(["Powershell.exe", r'lib\setAcc.ps1 ' +\
                         currentEmpEmail + ' ' + lastName + ' ' + firstName + ' ' + personalEmail + ' ' + str(position) + ' ' +\
@@ -153,26 +161,26 @@ def readSheet(sh):
                         UpdateEntryType(sh,row_count,"OLD")
                         
                         unauthorizedUser = row[1]
-                        deniedAccessMsg =  f"Hi\n\n  Please you are not authorized to create district email account. \n Contact the Human Resource department or send an email to {authUsers[0] + '@' + domain} \n\n Thank you"
+                        deniedAccessMsg =  f"Hi\n\nPlease you are not authorized to create district email account.\nContact the Human Resource department or send an email to {authUsers[0] + '@' + domain}\n\nThank you"
                         deniedSubj = 'UNAUTHORIZED USER - Hamilton'
                         # Send an email to the unauthorized user and copy the admin if further investigation needed
                         sendMessage('me', CreateMessage(srvAccEmail, unauthorizedUser, deniedSubj,deniedAccessMsg, admin))
                                                                              
 
                 elif row[10] == "Pending":
-                    email = str(row[9])
-                    personal_email = str(row[4])
-                    firstName = str(row[3])
-                    lastName = str(row[2])
-                    CurEmpEmail = str(row[1])
+                    newemail = str(row[9])
+                    personal_email = str(pEmail)
+                    firstName = str(fname)
+                    lastName = str(lname)
+                    EmpEmail = str(curEmpEmail)
                     
                     try:
-                        check = checkUser(email)
+                        check = checkUser(newemail)
                         
-                        if check == email:
+                        if check == newemail:
                             UpdateStatus(sh,row_count,status_msg("0"),"Account Successfully confirm in G-Suite")
                             passw = password()
-                            passReset = subprocess.Popen(["Powershell.exe", r'lib\resetPass.ps1 ' + email + ' ' + '"' + passw + '"' ], stdout=subprocess.PIPE)
+                            passReset = subprocess.Popen(["Powershell.exe", r'lib\resetPass.ps1 ' + newemail + ' ' + '"' + passw + '"' ], stdout=subprocess.PIPE)
                             msg = str(passReset.communicate()[0][:-2], 'utf-8')
                             status, user = msg.split('\r\n')
 
@@ -180,14 +188,14 @@ def readSheet(sh):
                             #Send account information to the new staff personal email and notify the employee who made the entry
                             if (personal_email):
                                 
-                                newHireMsg = f"Hi {firstName}\n\nPlease your account information is provided below:\n\tusername: {user}\n\temail: {email}\n\tpassword: {passw}\n\nKindly send an email to {admin} if you need any assistance\n\nThank you"
+                                newHireMsg = f"Hi {firstName}\n\nPlease your account information is provided below:\n\tusername: {user}\n\temail: {newemail}\n\tpassword: {passw}\n\nKindly send an email to {admin} if you need any assistance\n\nThank you"
                                 newHireSubj = f'Account Information for  {firstName} {lastName}'
                                 sendMessage('me', CreateMessage(sender=srvAccEmail, to=personal_email, subject=newHireSubj,message_text=newHireMsg))
                                 
 
-                                empMsg  = f"Hi \n\nThis is to notify you that the account for {firstName} {lastName} was created successfully.\nAn email containing the account information has been sent to the new hire using the personal email you provided.\nThank you"
+                                empMsg  = f"Hi \n\nThis is to notify you that the account for {firstName} {lastName} was created successfully.\nAn email containing the account information has been sent to the new hire using the personal email you provided.\n\nThank you"
                                 empSubj = f'Account for {firstName} {lastName}  Completed Successfully'
-                                sendMessage('me', CreateMessage(sender=srvAccEmail, to=CurEmpEmail, subject=empSubj, message_text=empMsg))
+                                sendMessage('me', CreateMessage(sender=srvAccEmail, to=EmpEmail, subject=empSubj, message_text=empMsg))
                             
                     except HttpError as err:
                         if err.resp.status in [404,]:
