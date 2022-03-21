@@ -12,7 +12,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.errors import HttpError
 from configparser import ConfigParser
-import subprocess, sys
+import subprocess, sys, logging
 
 # Custom functions from lib folder
 sys.path.insert(0, 'lib')
@@ -29,6 +29,7 @@ config.read('config/config.ini')
 
 
 if 'Document' not in config.sections() or 'admin' not in config.sections():
+    # Insert logger
     exit()
 
 # The ID and range of a sample spreadsheet.
@@ -41,6 +42,7 @@ if (config.get('Document', 'SpreadSheetID')):
     StatusColAdd = config.get('Document', 'StatusColAdd')
     CommentColAdd = config.get('Document', 'CommentColAdd')
 else:
+    # Insert logger
     exit()
 
 # Get authorized users and domains
@@ -51,6 +53,7 @@ if (config.get('admin', 'AuthorizeUsers')):
     openticket = config.get('admin', 'openticket')
     srvAccEmail = config.get('admin', 'serviceAccEmail')
 else:
+    # Insert logger
     exit()
 
 sheet = ""
@@ -93,7 +96,6 @@ def readSheet(sh):
     
     RANGE_NAME = sh + Range
 
-    #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
     result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
     values = result.get('values', [])
 
@@ -116,7 +118,7 @@ def readSheet(sh):
 
                 if entryType == "NEW":
                     
-                    currentEmpEmail = '"' + curEmpEmail + '"'
+                   
                     lastName = '"' + lname + '"'
                     firstName = '"' + fname + '"'
                     personalEmail = '"' + pEmail + '"'
@@ -126,9 +128,15 @@ def readSheet(sh):
 
 
                     if curEmpEmail.split("@")[0] in authUsers:
+                        #Get AD groups
+                        adgrps = ADGroups(abuilding, jobTitle)
+
+                        adgrps = '"' + adgrps + '"'
+
+                       
                         # Send Data to Powershell
                         createAcc = subprocess.Popen(["Powershell.exe", r'lib\setAcc.ps1 ' +\
-                        currentEmpEmail + ' ' + lastName + ' ' + firstName + ' ' + personalEmail + ' ' + str(position) + ' ' +\
+                        adgrps + ' ' + lastName + ' ' + firstName + ' ' + personalEmail + ' ' + str(position) + ' ' +\
                         str(building) + ' ' + department ], stdout=subprocess.PIPE)
 
                         # Read Information from Powershell
@@ -211,7 +219,7 @@ def readSheet(sh):
                     
 
 
-                #elif row[16] == "Activiting"
+                #elif row[16] == "Activating"
                     
 
             except IndexError:
@@ -227,11 +235,9 @@ def UpdateStatus(sh,address,status,update):
 
     body_value = {"majorDimension": "ROWS", "values": [[str(status),str(update)]]}
 
-    #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
     result = sheet.values().update(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME, valueInputOption='USER_ENTERED', body=body_value).execute()
 
-    #values = result.get('values', [])
-    #print(result)
+    
 
 def UpdateMail(sh,address,message):
     global sheet
@@ -241,11 +247,9 @@ def UpdateMail(sh,address,message):
     body_value = {"majorDimension": "ROWS", "values": [[str(message)]]}
 
 
-    #result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME).execute()
     result = sheet.values().update(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME, valueInputOption='USER_ENTERED', body=body_value).execute()
 
-    #values = result.get('values', [])
-    #print(result)
+   
 
 def UpdateEntryType(sh,row_add,message):
     global sheet
@@ -329,6 +333,29 @@ def password():
     return(password)
 
     
+def ADGroups(building, jobtitle):
+
+     groups = config.get('DefaultGroups', 'defaultGroups') if (config.get('DefaultGroups', 'defaultGroups')) else None
+    
+     grpsbyJobTitle = groupsbyJobTitle(jobtitle)
+
+     grpsbyBuilding = groupsbyBuilding(building)
+    
+     return groups + grpsbyJobTitle + grpsbyBuilding
+
+
+def groupsbyJobTitle(Jobtitle):
+    if config.options('GroupsbyJobTitle'):
+        if Jobtitle.lower() in config.options('GroupsbyJobTitle'):
+            return config.get('GroupsbyJobTitle', Jobtitle)
+    return ''
+
+def groupsbyBuilding(building):
+    if config.options('GroupsbyBuilding'):
+        if building.lower() in config.options('GroupsbyBuilding'):
+            return config.get('GroupsbyBuilding', building)
+    return ''
+
 
 if __name__ == '__main__':
     # call the main function 
